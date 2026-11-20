@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Pezzali MIND · Una sfida al giorno</title>
+  <meta name="description" content="Pezzali MIND: una sfida di logica al giorno, uguale per tutti. Pochi minuti, nessun account, nessuna pubblicità.">
+  <meta name="theme-color" content="#4338ca">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Pezzali MIND">
+  <meta property="og:title" content="Pezzali MIND · Una sfida al giorno">
+  <meta property="og:description" content="Un puzzle di logica al giorno, uguale per tutti. Quanto ci metti tu?">
+  <meta property="og:image" content="icons/icon-512.png">
+  <meta property="og:type" content="website">
+  <link rel="stylesheet" href="css/style.css">
+  <!-- Cloudflare Web Analytics (gratuito, senza cookie): incolla qui lo snippet con il tuo token. -->
+</head>
+<body>
+  <header class="top">
+    <button id="btn-home" class="brand" aria-label="Home">Pezzali <b>MIND</b></button>
+    <div class="top-actions">
+      <button id="btn-lang" class="ghost" aria-label="Lingua">EN</button>
+      <button id="btn-help" class="ghost round" aria-label="Regole">?</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="view-home">
+      <p class="date" id="home-date"></p>
+      <h1 data-i18n="tagline"></h1>
+
+      <div class="games">
+        <button class="game-card" id="card-nexus">
+          <span class="gc-icon gc-nexus" aria-hidden="true"></span>
+          <span class="gc-body">
+            <span class="gc-name">NEXUS</span>
+            <span class="gc-desc" data-i18n="nexusDesc"></span>
+            <span class="gc-status" id="nexus-status"></span>
+          </span>
+          <span class="gc-go" aria-hidden="true">›</span>
+        </button>
+
+        <button class="game-card practice" id="card-practice" hidden>
+          <span class="gc-icon gc-practice" aria-hidden="true"></span>
+          <span class="gc-body">
+            <span class="gc-name" data-i18n="practiceNext"></span>
+            <span class="gc-desc" data-i18n="practiceDesc"></span>
+            <span class="gc-status" id="practice-level"></span>
+          </span>
+          <span class="gc-go" aria-hidden="true">›</span>
+        </button>
+
+        <div class="game-card soon">
+          <span class="gc-icon gc-matrix" aria-hidden="true"></span>
+          <span class="gc-body">
+            <span class="gc-name">MATRIX</span>
+            <span class="gc-desc" data-i18n="matrixDesc"></span>
+          </span>
+          <span class="badge" data-i18n="soon"></span>
+        </div>
+
+        <div class="game-card soon">
+          <span class="gc-icon gc-deduco" aria-hidden="true"></span>
+          <span class="gc-body">
+            <span class="gc-name">DEDUCO</span>
+            <span class="gc-desc" data-i18n="deducoDesc"></span>
+          </span>
+          <span class="badge" data-i18n="soon"></span>
+        </div>
+      </div>
+
+      <div class="stats" id="home-stats"></div>
+
+      <footer>
+        <p id="privacy"></p>
+        <p><a href="https://pezzaliapp.com" target="_blank" rel="noopener">PezzaliApp</a> · <a href="https://alessandropezzali.it" target="_blank" rel="noopener">Alessandro Pezzali</a></p>
+      </footer>
+    </section>
+
+    <section id="view-game" hidden>
+      <div class="game-head">
+        <div>
+          <h2 id="g-title">NEXUS</h2>
+          <p id="g-sub"></p>
+        </div>
+        <div class="timer" id="g-timer">0:00</div>
+      </div>
+
+      <div class="board-wrap">
+        <div class="board" id="board"></div>
+      </div>
+
+      <p class="msg" id="g-msg" aria-live="polite"></p>
+
+      <div class="controls">
+        <button id="b-undo"><span aria-hidden="true">↶</span> <span data-i18n="undo"></span></button>
+        <button id="b-reset"><span aria-hidden="true">⟲</span> <span data-i18n="reset"></span></button>
+        <button id="b-hint"><span aria-hidden="true">💡</span> <span data-i18n="hint"></span></button>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="dlg-rules">
+    <h3 data-i18n="rulesTitle"></h3>
+    <ol id="rules-list"></ol>
+    <button id="rules-ok" class="primary wide" data-i18n="rulesOk"></button>
+  </dialog>
+
+  <dialog id="dlg-result">
+    <h3 id="r-title"></h3>
+    <div class="r-stats">
+      <div><b id="r-time"></b><span data-i18n="time"></span></div>
+      <div><b id="r-hints"></b><span data-i18n="hints"></span></div>
+      <div id="r-streak-box"><b id="r-streak"></b><span data-i18n="streak"></span></div>
+    </div>
+    <button id="r-share" class="primary wide" data-i18n="share"></button>
+    <div class="r-row">
+      <button id="r-wa">WhatsApp</button>
+      <button id="r-li">LinkedIn</button>
+      <button id="r-copy" data-i18n="copy"></button>
+    </div>
+    <p class="r-next" id="r-next-box"><span data-i18n="next"></span> <b id="r-next"></b></p>
+    <button id="r-practice" class="secondary wide"></button>
+    <button id="r-close" class="ghost wide" data-i18n="close"></button>
+  </dialog>
+
+  <div id="toast" role="status"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
