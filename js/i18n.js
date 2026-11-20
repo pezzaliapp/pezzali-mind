@@ -55,6 +55,8 @@ const STRINGS = {
     shareStreak: '🔥 Serie: {s}',
     privacy: 'Nessun account, nessuna pubblicità, nessun tracciamento. I tuoi dati restano sul dispositivo.',
     install: 'Installa l’app',
+    installHelp: 'Apri il menu ⋮ del browser e scegli “Installa app” o “Aggiungi a schermata Home”.',
+    installIos: 'Tocca Condividi ⬆ e poi “Aggiungi alla schermata Home”.',
   },
   en: {
     tagline: 'One challenge a day. A few minutes. The same for everyone.',
@@ -112,6 +114,8 @@ const STRINGS = {
     shareStreak: '🔥 Streak: {s}',
     privacy: 'No account, no ads, no tracking. Your data stays on your device.',
     install: 'Install the app',
+    installHelp: 'Open the browser menu ⋮ and choose “Install app” or “Add to Home screen”.',
+    installIos: 'Tap Share ⬆ then “Add to Home Screen”.',
   },
 };
 

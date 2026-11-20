@@ -312,10 +312,10 @@ function shareLinkedIn() {
 
 // --- Varie ---
 let flashTimer = null;
-function flash(msg) {
+function flash(msg, ms = 1800) {
   const el = $('#toast');
   el.textContent = msg; el.classList.add('show');
-  clearTimeout(flashTimer); flashTimer = setTimeout(() => el.classList.remove('show'), 1800);
+  clearTimeout(flashTimer); flashTimer = setTimeout(() => el.classList.remove('show'), ms);
 }
 
 function openRules() {
@@ -341,6 +341,24 @@ setInterval(() => {
 }, 250);
 document.addEventListener('visibilitychange', () => { lastTick = performance.now(); if (document.hidden) saveGame(); });
 
+// --- Installazione ---
+let installEvent = null;
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvent = e; });
+window.addEventListener('appinstalled', () => { installEvent = null; $('#btn-install').hidden = true; });
+
+async function install() {
+  if (installEvent) {
+    installEvent.prompt();
+    const { outcome } = await installEvent.userChoice;
+    if (outcome === 'accepted') $('#btn-install').hidden = true;
+    installEvent = null;
+    return;
+  }
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  flash(t(ios ? 'installIos' : 'installHelp'), 6000);
+}
+
 // --- Avvio ---
 function init() {
   initLang(store.get('lang', null));
@@ -350,6 +368,8 @@ function init() {
 
   $('#card-nexus').addEventListener('click', startDaily);
   $('#card-practice').addEventListener('click', startPractice);
+  $('#btn-install').hidden = isStandalone();
+  $('#btn-install').addEventListener('click', install);
   $('#btn-home').addEventListener('click', () => { saveGame(); renderHome(); });
   $('#btn-help').addEventListener('click', openRules);
   $('#btn-lang').addEventListener('click', () => { setLang(getLang() === 'it' ? 'en' : 'it'); store.set('lang', getLang()); refreshTexts(); });

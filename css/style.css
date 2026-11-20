@@ -186,9 +186,14 @@ dialog ol { padding-left: 1.2em; margin: 0 0 18px; display: grid; gap: 8px; }
 .r-next { text-align: center; color: var(--muted); font-size: 0.9rem; margin: 14px 0 4px; }
 .r-next b { color: var(--ink); font-variant-numeric: tabular-nums; }
 
+.install {
+  width: 100%; margin-top: 12px; padding: 13px; border-radius: var(--radius);
+  background: var(--accent-soft); color: var(--accent); border: 1px dashed var(--accent); font-weight: 700;
+}
+
 #toast {
   position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translate(-50%, 20px);
-  background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: 0.9rem; font-weight: 600;
+  background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 18px; font-size: 0.9rem; font-weight: 600; width: max-content; max-width: 90vw; text-align: center;
   opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s; z-index: 10;
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
