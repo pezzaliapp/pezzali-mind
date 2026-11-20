@@ -1,6 +1,6 @@
 // Service worker: tutto in cache per giocare offline.
 // Ad ogni nuova versione del sito cambia CACHE (es. mind-v2).
-const CACHE = 'mind-v1';
+const CACHE = 'mind-v2';
 const ASSETS = [
   './', './index.html', './css/style.css',
   './js/app.js', './js/nexus.js', './js/i18n.js',
