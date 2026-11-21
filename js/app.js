@@ -1,9 +1,11 @@
-import {
-  generate, validate, dailyConfig, practiceConfig, localDateKey, puzzleNumber,
-  canEnter, symbolViolations, hintPath, nextNumber, adjacent, wallKey, GEN_VERSION,
-} from './nexus.js';
+import { localDateKey, puzzleNumber } from './nexus.js';
 import { t, initLang, setLang, getLang, applyI18n } from './i18n.js';
+import * as nexus from './games/nexus-ui.js';
+import * as matrix from './games/matrix-ui.js';
+import * as deduco from './games/deduco-ui.js';
 
+const GAMES = [nexus, matrix, deduco];
+const byId = Object.fromEntries(GAMES.map((g) => [g.id, g]));
 const $ = (s) => document.querySelector(s);
 const APP_URL = new URL('./', location.href).href;
 
@@ -17,250 +19,149 @@ function fmtTime(ms) {
   const s = Math.floor(ms / 1000), m = Math.floor(s / 60);
   return `${m}:${String(s % 60).padStart(2, '0')}`;
 }
-
 function yesterdayKey(key) {
   const [y, m, d] = key.split('-').map(Number);
   return localDateKey(new Date(y, m - 1, d - 1));
 }
 
-function getStats() {
-  return store.get('stats', { played: 0, streak: 0, bestStreak: 0, lastDate: null, bestTime: null });
+// --- Statistiche (serie = giorni consecutivi con almeno una sfida risolta) ---
+function getDays() {
+  let days = store.get('days', null);
+  if (!days) {
+    days = {};
+    const old = store.get('stats', null); // versione 1: solo NEXUS
+    if (old?.lastDate) {
+      let k = old.lastDate;
+      for (let i = 0; i < (old.streak || 1); i++) { days[k] = 1; k = yesterdayKey(k); }
+      store.set('solvedCount', old.played || 0);
+      store.set('bestStreak', old.bestStreak || 0);
+      if (old.bestTime != null) store.set('best:nexus', old.bestTime);
+    }
+    store.set('days', days);
+  }
+  return days;
+}
+function currentStreak() {
+  const days = getDays();
+  let k = localDateKey();
+  if (!days[k]) k = yesterdayKey(k);
+  let s = 0;
+  while (days[k]) { s++; k = yesterdayKey(k); }
+  return s;
 }
 
-function currentStreak(stats) {
-  const today = localDateKey();
-  if (stats.lastDate === today || stats.lastDate === yesterdayKey(today)) return stats.streak;
-  return 0;
+function loadSaved(id, key) {
+  let s = store.get(`g:${id}:${key}`, null);
+  if (!s && id === 'nexus') {
+    const o = store.get('nexus:' + key, null);
+    if (o) s = { g: { path: o.path || [] }, hints: o.hints || 0, mistakes: 0, elapsed: o.elapsed || 0, solved: !!o.solved, started: !!o.path?.length };
+  }
+  return s;
 }
 
-// --- Stato di gioco ---
+const practiceLevel = (id) => store.get('practice:' + id, id === 'nexus' ? store.get('practiceLevel', 0) : 0);
+
+// --- Partita ---
 let S = null;
-let wallSet = new Set();
-let cellEls = [];
+let ctrl = null;
 let lastTick = performance.now();
 let saveCounter = 0;
 
-function startDaily() {
-  const key = localDateKey();
-  const cfg = dailyConfig(new Date());
-  const p = generate(`nexus-${GEN_VERSION}:${key}`, cfg);
-  const saved = store.get('nexus:' + key, null);
-  S = {
-    mode: 'daily', key, num: puzzleNumber(key), p,
-    path: saved?.path || [], hints: saved?.hints || 0, elapsed: saved?.elapsed || 0, solved: !!saved?.solved,
-  };
-  openGame();
-}
-
-function startPractice() {
-  const level = store.get('practiceLevel', 0);
-  const p = generate(`practice:${Date.now()}:${Math.random()}`, practiceConfig(level));
-  S = { mode: 'practice', level, p, path: [], hints: 0, elapsed: 0, solved: false };
-  openGame();
-}
-
-function saveGame() {
-  if (!S || S.mode !== 'daily') return;
-  store.set('nexus:' + S.key, { path: S.path, hints: S.hints, elapsed: Math.round(S.elapsed), solved: S.solved });
-}
-
-// --- Viste ---
-function show(view) {
-  $('#view-home').hidden = view !== 'home';
-  $('#view-game').hidden = view !== 'game';
-  window.scrollTo(0, 0);
-}
-
-function renderHome() {
+function startGame(id, mode) {
+  const mod = byId[id];
   const now = new Date();
-  $('#home-date').textContent = now.toLocaleDateString(getLang() === 'it' ? 'it-IT' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
   const key = localDateKey(now);
-  const saved = store.get('nexus:' + key, null);
-  const lvl = dailyConfig(now);
-  let status = t('statusTodo');
-  if (saved?.solved) status = t('statusDone', { t: fmtTime(saved.elapsed) });
-  else if (saved?.path?.length) status = t('statusDoing');
-  $('#nexus-status').textContent = `#${puzzleNumber(key)} · ${lvl.size}×${lvl.size} · ${status}`;
-  $('#card-nexus').classList.toggle('done', !!saved?.solved);
-  $('#card-practice').hidden = !saved?.solved;
-  $('#practice-level').textContent = t('level', { l: store.get('practiceLevel', 0) + 1 });
-
-  const st = getStats();
-  $('#home-stats').innerHTML = `
-    <div><b>${currentStreak(st)}</b><span>${t('streak')}</span></div>
-    <div><b>${st.bestStreak}</b><span>${t('bestStreak')}</span></div>
-    <div><b>${st.played}</b><span>${t('played')}</span></div>
-    <div><b>${st.bestTime != null ? fmtTime(st.bestTime) : '–'}</b><span>${t('bestTime')}</span></div>`;
-  show('home');
+  if (mode === 'daily') {
+    const saved = loadSaved(id, key);
+    S = {
+      id, mod, mode, key, num: puzzleNumber(key), puzzle: mod.daily(key, now),
+      g: saved?.g ?? null, hints: saved?.hints || 0, mistakes: saved?.mistakes || 0,
+      elapsed: saved?.elapsed || 0, solved: !!saved?.solved, started: !!saved?.started,
+    };
+  } else {
+    const level = practiceLevel(id);
+    S = { id, mod, mode, key, level, puzzle: mod.practice(level), g: null, hints: 0, mistakes: 0, elapsed: 0, solved: false, started: false };
+  }
+  openGame(true);
 }
 
-function openGame() {
-  wallSet = new Set(S.p.walls);
-  $('#g-title').textContent = S.mode === 'daily' ? `NEXUS #${S.num}` : `NEXUS · ${t('practice')}`;
+function persist() {
+  if (!S || S.mode !== 'daily') return;
+  store.set(`g:${S.id}:${S.key}`, { g: S.g, hints: S.hints, mistakes: S.mistakes, elapsed: Math.round(S.elapsed), solved: S.solved, started: S.started });
+}
+
+function openGame(first = false) {
+  const { mod } = S;
+  $('#g-title').textContent = S.mode === 'daily' ? `${mod.name} #${S.num}` : `${mod.name} · ${t('practice')}`;
   $('#g-sub').textContent = S.mode === 'daily'
-    ? `${t('daily')} · ${S.p.n}×${S.p.n}`
-    : `${t('level', { l: S.level + 1 })} · ${S.p.n}×${S.p.n}`;
-  buildBoard();
-  render();
-  show('game');
-  if (!store.get('seenRules', false)) openRules();
-  if (S.solved) setTimeout(showResult, 250);
-}
-
-// --- Plancia ---
-function buildBoard() {
-  const { n, numbers, symbols } = S.p;
-  const board = $('#board');
-  board.style.setProperty('--n', n);
-  board.innerHTML = `<svg class="path" viewBox="0 0 ${n} ${n}" aria-hidden="true">
-    <g class="fills"></g><polyline class="line" points=""/><circle class="headdot" r="0.2" cx="-1" cy="-1"/></svg>`;
-  cellEls = [];
-  for (let i = 0; i < n * n; i++) {
-    const el = document.createElement('div');
-    el.className = 'cell';
-    const c = i % n, r = Math.floor(i / n);
-    if (c < n - 1 && wallSet.has(wallKey(i, i + 1))) el.classList.add('wr');
-    if (r < n - 1 && wallSet.has(wallKey(i, i + n))) el.classList.add('wb');
-    if (numbers[i] !== undefined) el.innerHTML = `<span class="num">${numbers[i]}</span>`;
-    else if (symbols[i]) el.innerHTML = `<span class="sym sym-${symbols[i].toLowerCase()}"></span>`;
-    board.appendChild(el);
-    cellEls.push(el);
-  }
-}
-
-function render() {
-  const { n, numbers, maxNumber } = S.p;
-  const inPath = new Set(S.path);
-  const bad = symbolViolations(S.p, S.path);
-  const head = S.path[S.path.length - 1];
-  cellEls.forEach((el, i) => {
-    el.classList.toggle('on', inPath.has(i));
-    el.classList.toggle('bad', bad.has(i));
-    el.classList.toggle('head', i === head);
-  });
-  const svg = $('#board svg');
-  const pt = (i) => [i % n + 0.5, Math.floor(i / n) + 0.5];
-  svg.querySelector('.fills').innerHTML = S.path.map((i) => `<rect x="${i % n}" y="${Math.floor(i / n)}" width="1" height="1"/>`).join('');
-  svg.querySelector('.line').setAttribute('points', S.path.map((i) => pt(i).join(',')).join(' '));
-  const hd = svg.querySelector('.headdot');
-  if (head !== undefined) { const [x, y] = pt(head); hd.setAttribute('cx', x); hd.setAttribute('cy', y); } else { hd.setAttribute('cx', -1); }
-  $('#board').classList.toggle('solved', S.solved);
-
-  // Messaggio
-  let msg = '';
-  if (S.solved) msg = S.mode === 'daily' ? t('solvedTitle') : t('solvedPractice');
-  else if (!S.path.length) msg = t('msgStart');
-  else if (bad.size) msg = t('msgSymbol');
-  else if (numbers[head] === maxNumber && S.path.length < n * n) msg = t('msgFillAll', { n: maxNumber });
-  else if (S.path.length === n * n) { const r = validate(S.p, S.path); msg = r.error === 'symbol' ? t('msgSymbol') : t('msgEnd', { n: maxNumber }); }
-  else msg = t('msgNext', { n: nextNumber(S.p, S.path) });
-  $('#g-msg').textContent = msg;
+    ? `${t('daily')} · ${mod.label(S.puzzle, t)}`
+    : `${t('level', { l: S.level + 1 })} · ${mod.label(S.puzzle, t)}`;
+  const stage = $('#stage');
+  stage.className = `stage stage-${mod.id}`;
+  if (mod.startsOnOpen && !S.solved) S.started = true;
+  const ctx = {
+    root: stage, puzzle: S.puzzle, saved: S.g, t,
+    save(g) { S.g = g; persist(); },
+    start() { if (!S.started) { S.started = true; persist(); } },
+    hint() { S.hints++; persist(); flash(t('hintUsed')); },
+    mistake() { S.mistakes++; persist(); },
+    win: winGame,
+    msg(text) { $('#g-msg').textContent = text; },
+    flash,
+    solved: () => S.solved,
+  };
+  ctrl = mod.mount(ctx);
+  renderControls();
   $('#g-timer').textContent = fmtTime(S.elapsed);
-  ['#b-undo', '#b-reset', '#b-hint'].forEach((s) => { $(s).disabled = S.solved; });
+  show('game');
+  if (first && !store.get('seenRules:' + mod.id, mod.id === 'nexus' && store.get('seenRules', false))) openRules(mod.id);
+  if (first && S.solved) setTimeout(showResult, 250);
 }
 
-function changed() {
-  if (!S.solved && S.path.length === S.p.n * S.p.n && validate(S.p, S.path).ok) win();
-  render();
-  saveGame();
-}
-
-// --- Input a trascinamento ---
-let dragging = false;
-
-function cellFromEvent(e) {
-  const rect = $('#board').getBoundingClientRect();
-  const n = S.p.n;
-  const c = Math.floor(((e.clientX - rect.left) / rect.width) * n);
-  const r = Math.floor(((e.clientY - rect.top) / rect.height) * n);
-  if (c < 0 || r < 0 || c >= n || r >= n) return -1;
-  return r * n + c;
-}
-
-function stepTo(target) {
-  const n = S.p.n;
-  for (let guard = 0; guard < n * 2; guard++) {
-    const head = S.path[S.path.length - 1];
-    if (head === target || head === undefined) return;
-    const prev = S.path[S.path.length - 2];
-    if (target === prev) { S.path.pop(); return; }
-    const hr = Math.floor(head / n), hc = head % n, tr = Math.floor(target / n), tc = target % n;
-    const dr = Math.sign(tr - hr), dc = Math.sign(tc - hc);
-    const options = Math.abs(tr - hr) >= Math.abs(tc - hc)
-      ? [dr ? head + dr * n : null, dc ? head + dc : null]
-      : [dc ? head + dc : null, dr ? head + dr * n : null];
-    let moved = false;
-    for (const nx of options) {
-      if (nx == null || !adjacent(head, nx, n)) continue;
-      if (nx === prev) { S.path.pop(); moved = true; break; }
-      if (canEnter(S.p, S.path, nx, wallSet)) { S.path.push(nx); moved = true; break; }
-    }
-    if (!moved) return;
+function renderControls() {
+  const box = $('#controls');
+  box.innerHTML = '';
+  box.style.gridTemplateColumns = `repeat(${ctrl.controls.length}, 1fr)`;
+  for (const c of ctrl.controls) {
+    const b = document.createElement('button');
+    b.className = c.primary ? 'primary' : '';
+    b.innerHTML = `<span aria-hidden="true">${c.icon}</span> ${t(c.label)}`;
+    b.disabled = S.solved;
+    b.addEventListener('click', c.fn);
+    box.appendChild(b);
   }
 }
 
-function onDown(e) {
-  if (!S || S.solved) return;
-  const cell = cellFromEvent(e);
-  if (cell < 0) return;
-  e.preventDefault();
-  const at = S.path.indexOf(cell);
-  if (at >= 0) S.path.length = at + 1;
-  else if (!S.path.length) {
-    if (!canEnter(S.p, S.path, cell, wallSet)) { flash(t('msgStart')); return; }
-    S.path.push(cell);
-  } else stepTo(cell);
-  dragging = true;
-  $('#board').setPointerCapture?.(e.pointerId);
-  changed();
-}
-
-function onMove(e) {
-  if (!dragging || !S || S.solved) return;
-  const cell = cellFromEvent(e);
-  if (cell < 0 || cell === S.path[S.path.length - 1]) return;
-  const before = S.path.length;
-  stepTo(cell);
-  if (S.path.length !== before) changed();
-}
-
-function onUp() { dragging = false; }
-
-// --- Azioni ---
-function undo() { if (S.path.length) { S.path.pop(); changed(); } }
-function reset() { S.path = []; changed(); }
-function hint() {
-  S.path = hintPath(S.p, S.path);
-  S.hints++;
-  flash(t('hintUsed'));
-  changed();
-}
-
-// --- Vittoria ---
-function win() {
+function winGame() {
+  if (S.solved) return;
   S.solved = true;
   if (S.mode === 'daily') {
-    const st = getStats();
-    if (st.lastDate !== S.key) {
-      st.streak = st.lastDate === yesterdayKey(S.key) ? st.streak + 1 : 1;
-      st.bestStreak = Math.max(st.bestStreak, st.streak);
-      st.played++;
-      st.lastDate = S.key;
-      if (st.bestTime == null || S.elapsed < st.bestTime) st.bestTime = Math.round(S.elapsed);
-      store.set('stats', st);
-    }
+    const days = getDays();
+    days[S.key] = (days[S.key] || 0) + 1;
+    store.set('days', days);
+    store.set('solvedCount', store.get('solvedCount', 0) + 1);
+    store.set('bestStreak', Math.max(store.get('bestStreak', 0), currentStreak()));
+    const best = store.get('best:' + S.id, null);
+    if (best == null || S.elapsed < best) store.set('best:' + S.id, Math.round(S.elapsed));
   } else {
-    store.set('practiceLevel', S.level + 1);
+    store.set('practice:' + S.id, S.level + 1);
   }
+  persist();
+  $('#controls').querySelectorAll('button').forEach((b) => { b.disabled = true; });
   navigator.vibrate?.(30);
-  setTimeout(showResult, 450);
+  setTimeout(showResult, 500);
 }
 
 function shareText() {
-  const head = S.mode === 'daily' ? t('shareHead', { n: S.num }) : t('sharePractice', { l: S.level + 1 });
-  const lines = [head, `🧩 ${S.p.n}×${S.p.n} · ${t('shareLine', { t: fmtTime(S.elapsed), h: S.hints })}`];
+  const { mod } = S;
+  const head = S.mode === 'daily'
+    ? `Pezzali MIND · ${mod.name} #${S.num}`
+    : `Pezzali MIND · ${mod.name} (${t('sharePractice')}, ${t('level', { l: S.level + 1 })})`;
+  let line = `${mod.shareLine(S.puzzle, S.g, t)}\n⏱️ ${fmtTime(S.elapsed)} · 💡 ${S.hints}`;
+  if (mod.hasMistakes) line += ` · ❌ ${S.mistakes}`;
+  const lines = [head, line];
   if (S.mode === 'daily') {
-    const s = getStats().streak;
+    const s = currentStreak();
     lines.push(t('shareStreak', { s: `${s} ${s === 1 ? t('day') : t('days')}` }));
   }
   lines.push(APP_URL);
@@ -268,15 +169,26 @@ function shareText() {
 }
 
 let countdownTimer = null;
+function nextUnsolved() {
+  const key = localDateKey();
+  return GAMES.find((g) => g.id !== S.id && !loadSaved(g.id, key)?.solved);
+}
+
 function showResult() {
   const dlg = $('#dlg-result');
-  $('#r-title').textContent = S.mode === 'daily' ? `${t('solvedTitle')} · NEXUS #${S.num}` : t('solvedPractice');
+  const isDaily = S.mode === 'daily';
+  $('#r-title').textContent = isDaily ? `${t('solvedTitle')} · ${S.mod.name} #${S.num}` : t('solvedPractice');
   $('#r-time').textContent = fmtTime(S.elapsed);
   $('#r-hints').textContent = S.hints;
-  const isDaily = S.mode === 'daily';
+  $('#r-mistakes-box').hidden = !S.mod.hasMistakes;
+  $('#r-mistakes').textContent = S.mistakes;
   $('#r-streak-box').hidden = !isDaily;
-  if (isDaily) $('#r-streak').textContent = getStats().streak;
-  $('#r-practice').textContent = isDaily ? t('practiceNext') : `${t('practiceNext')} · ${t('level', { l: store.get('practiceLevel', 0) + 1 })}`;
+  $('#r-streak').textContent = currentStreak();
+  $('.r-stats').style.gridTemplateColumns = `repeat(${2 + (S.mod.hasMistakes ? 1 : 0) + (isDaily ? 1 : 0)}, 1fr)`;
+  const nx = isDaily ? nextUnsolved() : null;
+  $('#r-nextgame').hidden = !nx;
+  if (nx) { $('#r-nextgame').textContent = t('playNext', { g: nx.name }); $('#r-nextgame').dataset.id = nx.id; }
+  $('#r-practice').textContent = `${t('practiceNext')} · ${t('level', { l: practiceLevel(S.id) + 1 })}`;
   $('#r-next-box').hidden = !isDaily;
   const tick = () => {
     const now = new Date(), next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
@@ -294,7 +206,6 @@ async function share() {
   }
   copy();
 }
-
 async function copy() {
   const text = shareText();
   try { await navigator.clipboard.writeText(text); } catch {
@@ -303,11 +214,54 @@ async function copy() {
   }
   flash(t('copied'));
 }
-
 function shareWhatsApp() { window.open('https://wa.me/?text=' + encodeURIComponent(shareText()), '_blank', 'noopener'); }
 function shareLinkedIn() {
   copy(); // LinkedIn accetta solo il link: il testo resta negli appunti da incollare
   window.open('https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(APP_URL), '_blank', 'noopener');
+}
+
+// --- Home ---
+function show(view) {
+  $('#view-home').hidden = view !== 'home';
+  $('#view-game').hidden = view !== 'game';
+  window.scrollTo(0, 0);
+}
+
+function renderHome() {
+  const now = new Date();
+  const key = localDateKey(now);
+  $('#home-date').textContent = now.toLocaleDateString(getLang() === 'it' ? 'it-IT' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  let doneToday = 0;
+  $('#games').innerHTML = GAMES.map((mod) => {
+    const saved = loadSaved(mod.id, key);
+    if (saved?.solved) doneToday++;
+    let status = t('statusTodo');
+    if (saved?.solved) status = t('statusDone', { t: fmtTime(saved.elapsed) });
+    else if (saved?.started) status = t('statusDoing');
+    let label = '';
+    try { label = mod.label(mod.daily(key, now), t); } catch { /* ignora */ }
+    return `<div class="game-card ${saved?.solved ? 'done' : ''}">
+      <button class="gc-main" data-play="${mod.id}">
+        <span class="gc-icon gc-${mod.id}" aria-hidden="true"></span>
+        <span class="gc-body">
+          <span class="gc-name">${mod.name}</span>
+          <span class="gc-desc">${t(mod.id + 'Desc')}</span>
+          <span class="gc-status">#${puzzleNumber(key)} · ${label} · ${status}</span>
+        </span>
+        <span class="gc-go" aria-hidden="true">${saved?.solved ? '✓' : '›'}</span>
+      </button>
+      ${saved?.solved ? `<button class="gc-practice" data-practice="${mod.id}">∞ ${t('practiceNext')} · ${t('level', { l: practiceLevel(mod.id) + 1 })}</button>` : ''}
+    </div>`;
+  }).join('');
+  $('#games').querySelectorAll('[data-play]').forEach((b) => b.addEventListener('click', () => startGame(b.dataset.play, 'daily')));
+  $('#games').querySelectorAll('[data-practice]').forEach((b) => b.addEventListener('click', () => startGame(b.dataset.practice, 'practice')));
+
+  $('#home-stats').innerHTML = `
+    <div><b>${currentStreak()}</b><span>${t('streak')}</span></div>
+    <div><b>${store.get('bestStreak', 0)}</b><span>${t('bestStreak')}</span></div>
+    <div><b>${store.get('solvedCount', 0)}</b><span>${t('solvedTotal')}</span></div>
+    <div><b>${doneToday}/${GAMES.length}</b><span>${t('today')}</span></div>`;
+  show('home');
 }
 
 // --- Varie ---
@@ -318,35 +272,20 @@ function flash(msg, ms = 1800) {
   clearTimeout(flashTimer); flashTimer = setTimeout(() => el.classList.remove('show'), ms);
 }
 
-function openRules() {
-  $('#rules-list').innerHTML = t('rules').map((r) => `<li>${r}</li>`).join('');
+function openRules(id) {
+  const ids = id ? [id] : GAMES.map((g) => g.id);
+  $('#rules-body').innerHTML = ids.map((gid) => `
+    <h3>${t('rulesTitle', { g: byId[gid].name })}</h3>
+    <ol>${t('rules_' + gid).map((r) => `<li>${r}</li>`).join('')}</ol>`).join('');
+  $('#rules-ok').dataset.ids = ids.join(',');
   $('#dlg-rules').showModal();
 }
-
-function refreshTexts() {
-  applyI18n();
-  $('#btn-lang').textContent = getLang() === 'it' ? 'EN' : 'IT';
-  $('#privacy').textContent = t('privacy');
-  if (!$('#view-game').hidden && S) openGame(); else renderHome();
-}
-
-// Cronometro: avanza solo con la pagina visibile e il gioco iniziato.
-setInterval(() => {
-  const now = performance.now();
-  const dt = now - lastTick; lastTick = now;
-  if (!S || S.solved || !S.path.length || document.hidden || $('#view-game').hidden) return;
-  S.elapsed += Math.min(dt, 2000);
-  $('#g-timer').textContent = fmtTime(S.elapsed);
-  if (++saveCounter % 8 === 0) saveGame();
-}, 250);
-document.addEventListener('visibilitychange', () => { lastTick = performance.now(); if (document.hidden) saveGame(); });
 
 // --- Installazione ---
 let installEvent = null;
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvent = e; });
 window.addEventListener('appinstalled', () => { installEvent = null; $('#btn-install').hidden = true; });
-
 async function install() {
   if (installEvent) {
     installEvent.prompt();
@@ -355,9 +294,26 @@ async function install() {
     installEvent = null;
     return;
   }
-  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  flash(t(ios ? 'installIos' : 'installHelp'), 6000);
+  flash(t(/iphone|ipad|ipod/i.test(navigator.userAgent) ? 'installIos' : 'installHelp'), 6000);
 }
+
+function refreshTexts() {
+  applyI18n();
+  $('#btn-lang').textContent = getLang() === 'it' ? 'EN' : 'IT';
+  $('#privacy').textContent = t('privacy');
+  if (!$('#view-game').hidden && S) openGame(false); else renderHome();
+}
+
+// Cronometro: avanza solo con la pagina visibile e il gioco iniziato.
+setInterval(() => {
+  const now = performance.now();
+  const dt = now - lastTick; lastTick = now;
+  if (!S || S.solved || !S.started || document.hidden || $('#view-game').hidden) return;
+  S.elapsed += Math.min(dt, 2000);
+  $('#g-timer').textContent = fmtTime(S.elapsed);
+  if (++saveCounter % 8 === 0) persist();
+}, 250);
+document.addEventListener('visibilitychange', () => { lastTick = performance.now(); if (document.hidden) persist(); });
 
 // --- Avvio ---
 function init() {
@@ -366,38 +322,29 @@ function init() {
   $('#btn-lang').textContent = getLang() === 'it' ? 'EN' : 'IT';
   $('#privacy').textContent = t('privacy');
 
-  $('#card-nexus').addEventListener('click', startDaily);
-  $('#card-practice').addEventListener('click', startPractice);
   $('#btn-install').hidden = isStandalone();
   $('#btn-install').addEventListener('click', install);
-  $('#btn-home').addEventListener('click', () => { saveGame(); renderHome(); });
-  $('#btn-help').addEventListener('click', openRules);
+  $('#btn-home').addEventListener('click', () => { persist(); renderHome(); });
+  $('#btn-help').addEventListener('click', () => openRules($('#view-game').hidden ? null : S?.id));
   $('#btn-lang').addEventListener('click', () => { setLang(getLang() === 'it' ? 'en' : 'it'); store.set('lang', getLang()); refreshTexts(); });
-  $('#rules-ok').addEventListener('click', () => { store.set('seenRules', true); $('#dlg-rules').close(); });
-
-  const board = $('#board');
-  board.addEventListener('pointerdown', onDown);
-  board.addEventListener('pointermove', onMove);
-  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((ev) => board.addEventListener(ev, onUp));
-
-  $('#b-undo').addEventListener('click', undo);
-  $('#b-reset').addEventListener('click', reset);
-  $('#b-hint').addEventListener('click', hint);
+  $('#rules-ok').addEventListener('click', () => {
+    ($('#rules-ok').dataset.ids || '').split(',').filter(Boolean).forEach((id) => store.set('seenRules:' + id, true));
+    $('#dlg-rules').close();
+  });
 
   $('#r-share').addEventListener('click', share);
   $('#r-wa').addEventListener('click', shareWhatsApp);
   $('#r-li').addEventListener('click', shareLinkedIn);
   $('#r-copy').addEventListener('click', copy);
-  $('#r-practice').addEventListener('click', () => { $('#dlg-result').close(); startPractice(); });
+  $('#r-practice').addEventListener('click', () => { $('#dlg-result').close(); startGame(S.id, 'practice'); });
+  $('#r-nextgame').addEventListener('click', (e) => { $('#dlg-result').close(); startGame(e.currentTarget.dataset.id, 'daily'); });
   $('#r-close').addEventListener('click', () => $('#dlg-result').close());
   $('#dlg-result').addEventListener('close', () => clearInterval(countdownTimer));
 
-  // A mezzanotte la home si aggiorna da sola.
   let dayKey = localDateKey();
   setInterval(() => { const k = localDateKey(); if (k !== dayKey) { dayKey = k; if (!$('#view-home').hidden) renderHome(); } }, 30000);
 
   renderHome();
-
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
 

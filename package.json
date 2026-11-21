@@ -2,5 +2,5 @@
   "name": "pezzali-mind",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node tests/nexus.test.js" }
+  "scripts": { "test": "node tests/nexus.test.js && node tests/games.test.js" }
 }

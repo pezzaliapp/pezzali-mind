@@ -37,45 +37,7 @@
       <p class="date" id="home-date"></p>
       <h1 data-i18n="tagline"></h1>
 
-      <div class="games">
-        <button class="game-card" id="card-nexus">
-          <span class="gc-icon gc-nexus" aria-hidden="true"></span>
-          <span class="gc-body">
-            <span class="gc-name">NEXUS</span>
-            <span class="gc-desc" data-i18n="nexusDesc"></span>
-            <span class="gc-status" id="nexus-status"></span>
-          </span>
-          <span class="gc-go" aria-hidden="true">›</span>
-        </button>
-
-        <button class="game-card practice" id="card-practice" hidden>
-          <span class="gc-icon gc-practice" aria-hidden="true"></span>
-          <span class="gc-body">
-            <span class="gc-name" data-i18n="practiceNext"></span>
-            <span class="gc-desc" data-i18n="practiceDesc"></span>
-            <span class="gc-status" id="practice-level"></span>
-          </span>
-          <span class="gc-go" aria-hidden="true">›</span>
-        </button>
-
-        <div class="game-card soon">
-          <span class="gc-icon gc-matrix" aria-hidden="true"></span>
-          <span class="gc-body">
-            <span class="gc-name">MATRIX</span>
-            <span class="gc-desc" data-i18n="matrixDesc"></span>
-          </span>
-          <span class="badge" data-i18n="soon"></span>
-        </div>
-
-        <div class="game-card soon">
-          <span class="gc-icon gc-deduco" aria-hidden="true"></span>
-          <span class="gc-body">
-            <span class="gc-name">DEDUCO</span>
-            <span class="gc-desc" data-i18n="deducoDesc"></span>
-          </span>
-          <span class="badge" data-i18n="soon"></span>
-        </div>
-      </div>
+      <div class="games" id="games"></div>
 
       <button id="btn-install" class="install" hidden><span aria-hidden="true">⬇</span> <span data-i18n="install"></span></button>
 
@@ -96,23 +58,16 @@
         <div class="timer" id="g-timer">0:00</div>
       </div>
 
-      <div class="board-wrap">
-        <div class="board" id="board"></div>
-      </div>
+      <div id="stage" class="stage"></div>
 
       <p class="msg" id="g-msg" aria-live="polite"></p>
 
-      <div class="controls">
-        <button id="b-undo"><span aria-hidden="true">↶</span> <span data-i18n="undo"></span></button>
-        <button id="b-reset"><span aria-hidden="true">⟲</span> <span data-i18n="reset"></span></button>
-        <button id="b-hint"><span aria-hidden="true">💡</span> <span data-i18n="hint"></span></button>
-      </div>
+      <div class="controls" id="controls"></div>
     </section>
   </main>
 
   <dialog id="dlg-rules">
-    <h3 data-i18n="rulesTitle"></h3>
-    <ol id="rules-list"></ol>
+    <div id="rules-body"></div>
     <button id="rules-ok" class="primary wide" data-i18n="rulesOk"></button>
   </dialog>
 
@@ -121,6 +76,7 @@
     <div class="r-stats">
       <div><b id="r-time"></b><span data-i18n="time"></span></div>
       <div><b id="r-hints"></b><span data-i18n="hints"></span></div>
+      <div id="r-mistakes-box"><b id="r-mistakes"></b><span data-i18n="mistakes"></span></div>
       <div id="r-streak-box"><b id="r-streak"></b><span data-i18n="streak"></span></div>
     </div>
     <button id="r-share" class="primary wide" data-i18n="share"></button>
@@ -130,6 +86,7 @@
       <button id="r-copy" data-i18n="copy"></button>
     </div>
     <p class="r-next" id="r-next-box"><span data-i18n="next"></span> <b id="r-next"></b></p>
+    <button id="r-nextgame" class="primary wide alt" hidden></button>
     <button id="r-practice" class="secondary wide"></button>
     <button id="r-close" class="ghost wide" data-i18n="close"></button>
   </dialog>

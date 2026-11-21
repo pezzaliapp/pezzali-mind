@@ -1,9 +1,10 @@
 // Service worker: tutto in cache per giocare offline.
-// Ad ogni nuova versione del sito cambia CACHE (es. mind-v4).
-const CACHE = 'mind-v4';
+// Ad ogni nuova versione del sito cambia CACHE (es. mind-v5).
+const CACHE = 'mind-v5';
 const ASSETS = [
   './', './index.html', './css/style.css',
-  './js/app.js', './js/nexus.js', './js/i18n.js',
+  './js/app.js', './js/nexus.js', './js/i18n.js', './js/matrix.js', './js/deduco.js',
+  './js/games/nexus-ui.js', './js/games/matrix-ui.js', './js/games/deduco-ui.js',
   './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png',
 ];
 
