@@ -127,7 +127,7 @@ footer { color: var(--muted); font-size: 0.8rem; text-align: center; margin-top:
 .board .fills rect { fill: var(--path-fill); }
 .board .line { fill: none; stroke: var(--path); stroke-width: 0.34; stroke-linecap: round; stroke-linejoin: round; }
 .board .headdot { fill: var(--path); }
-.board.solved .line, .board.solved .headdot { stroke: var(--ok); fill: none; }
+.board.solved .line { stroke: var(--ok); }
 .board.solved .headdot { fill: var(--ok); }
 .board.solved .fills rect { fill: rgba(5, 150, 105, 0.14); }
 
